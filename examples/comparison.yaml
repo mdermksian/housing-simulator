@@ -1,0 +1,53 @@
+# Monetary amounts are dollars; rates are decimal fractions (0.03 = 3%).
+simulation:
+  start: 2026-01-31
+  end: 2041-01-31
+
+household:
+  starting_wealth: 150000
+  monthly_income: 6250  # Take-home income, not gross salary.
+  annual_income_increase: 0.02
+  cash_reserve: 15000
+  savings_return: 0.02  # Effective annual return.
+  investment_return: 0.06  # Effective annual return.
+
+rent:
+  monthly_rent: 3000
+  annual_increase: 0.03
+  expenses:
+    - name: utilities
+      amount: 300
+      annual_increase: 0.02
+    - name: renters insurance
+      amount: 300
+      schedule: yearly
+
+buy:
+  purchase_price: 600000
+  down_payment: 120000
+  purchase_closing_costs: 10000  # Fixed amount, not a percentage.
+  mortgage:
+    annual_rate: 0.0658  # Nominal annual rate; monthly rate is this / 12.
+    term_years: 30
+  appreciation: 0.03  # Effective annual rate.
+  selling_cost_fraction: 0.06
+  expenses:
+    - name: property tax
+      amount: 6000  # Explicit amount; not derived from home value.
+      schedule: yearly
+      annual_increase: 0.02
+    - name: maintenance
+      amount: 300
+      annual_increase: 0.02
+    - name: homeowners insurance
+      amount: 150
+      annual_increase: 0.02
+    - name: utilities
+      amount: 200
+      annual_increase: 0.02
+
+one_time_expenses:
+  - name: roof replacement
+    date: 2036-06-15
+    amount: 15000
+    target: buy

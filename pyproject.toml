@@ -1,9 +1,28 @@
 [project]
 name = "house-simulator"
 version = "0.1.0"
-description = "Add your description here"
+description = "An event-driven rent-versus-buy housing simulator"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "ruff>=0.16.0",
+    "PyYAML>=6.0.2,<7",
 ]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project.scripts]
+house-simulator = "house_simulator.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8.3", "ruff>=0.16.0"]
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

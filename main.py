@@ -1,6 +1,4 @@
-from house_simulator import HouseSimulator
-
+from house_simulator.cli import main
 
 if __name__ == "__main__":
-    simulator = HouseSimulator()
-    simulator.run()
+    raise SystemExit(main())
