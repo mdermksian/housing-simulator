@@ -62,7 +62,8 @@ jobs:
         run: uv run --no-sync python scripts/slint_quality.py format --check
 
       - name: Slint lint
-        run: uv run --no-sync python scripts/slint_quality.py lint
+        # The Python binding initializes its display backend during import.
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" uv run --no-sync python scripts/slint_quality.py lint
 
       - name: Tests including Slint windows
         run: xvfb-run -a -s "-screen 0 1280x1024x24" uv run --no-sync pytest -ra

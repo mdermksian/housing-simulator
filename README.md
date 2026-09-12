@@ -206,16 +206,21 @@ uv run --no-sync python scripts/slint_quality.py format
 
 Slint lint fails on **warnings as well as errors**, including compiler-reported
 deprecations. It compiles the application entry point and its imported components
-without creating a window. Reusable components are checked through those imports,
-so they are not incorrectly treated as standalone windows. The quality helper is
-development tooling; it does not add Slint dependencies to the simulator core.
+without creating a window. However, the Python binding initializes its display
+backend during import, so lint still requires a display. Reusable components are
+checked through their imports, so they are not incorrectly treated as standalone
+windows. The quality helper is development tooling; it does not add Slint
+dependencies to the simulator core.
 
-CI runs window tests using Xvfb and Slint's software renderer. To reproduce that
-on Ubuntu, install the desktop runtime and run:
+CI runs both Slint lint and window tests using Xvfb and Slint's software renderer.
+To reproduce that on Ubuntu without a desktop display, install the desktop runtime
+and run:
 
 ```sh
 sudo apt-get install -y xvfb xauth libx11-xcb1 libxkbcommon-x11-0 \
   libxcb-shape0 libxcb-xfixes0 libinput10 libgbm1 fonts-dejavu-core
+SLINT_BACKEND=winit-software SLINT_STYLE=fluent \
+  xvfb-run -a -s "-screen 0 1280x1024x24" uv run --no-sync python scripts/slint_quality.py lint
 SLINT_BACKEND=winit-software SLINT_STYLE=fluent \
   xvfb-run -a -s "-screen 0 1280x1024x24" uv run --no-sync pytest -ra
 ```
