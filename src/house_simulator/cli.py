@@ -16,7 +16,7 @@ def main(argv: list[str] | None = None) -> int:
     run = commands.add_parser("run", help="Run a YAML configuration and export CSV")
     run.add_argument("config", type=Path)
     run.add_argument("--output", required=True, type=Path)
-    commands.add_parser("ui", help="Open the configuration preview desktop UI")
+    commands.add_parser("ui", help="Open the simulation editor desktop UI")
     args = parser.parse_args(argv)
     if args.command == "ui":
         return _run_ui()

@@ -4,8 +4,8 @@ Compare renting and buying over a configured period, accounting for household
 income, invested savings, mortgage debt, home value, and housing expenses. The
 Python simulator advances directly to dates when something changes and records
 immutable snapshots for plotting. Configuration and execution are available
-through Python and a YAML-to-CSV command line. An optional Slint desktop preview
-demonstrates editing plain Python state; simulation execution remains in the CLI.
+through Python, a YAML-to-CSV command line, and an optional Slint desktop editor.
+The desktop can define the full configuration, run a comparison, and export results.
 
 ## Run a comparison
 
@@ -29,98 +29,137 @@ updates, and one additional date for the roof expense.
 All amounts are dollars. Rates are decimal fractions: **0.03 means 3%**.
 Income is take-home income. Returns and price changes are deterministic.
 
-## Open the desktop preview
+## Use the desktop editor
 
 ```sh
 uv run --extra ui house-simulator ui
 ```
 
 Alternatively, install with `python -m pip install -e '.[ui]'` and run
-`house-simulator ui`. The optional extra pins Slint Python to `1.17.1b2`; the
-simulation and CSV command do not require it. A desktop display is needed to open
-the window. Slint supplies binary wheels for supported platforms, so no separate
-Rust build or generated Python bindings are needed for this scaffold.
+`house-simulator ui`. Slint is an optional dependency; the simulator and CSV CLI
+work without it. The UI requires a desktop display. All `.slint` files are packaged
+with the application and load independently of the current working directory.
 
-The window starts with **My housing comparison** and **15 years**. Edit the name
-or duration (1–100 years) to update the summary immediately. Empty names display
-**Untitled comparison**. Reset restores the defaults. Preview state is in memory;
-the window does not load/save YAML or execute the simulation.
+Use the section navigation for **Simulation**, **Household**, **Renting**,
+**Buying**, **One-time expenses**, and **Results**. Forms scroll independently of
+the toolbar. Every field in the YAML schema is editable, including both lists of
+recurring expenses, mortgage details, and one-time expense targets.
 
-The `.slint` files ship with the Python package and load through package resources,
-including relative imports between components. An installed `house-simulator ui`
-works from any working directory.
+A new document starts with today's date, an end date fifteen calendar years later,
+a 30-year mortgage term, zero optional rates/costs, and empty expense lists.
+Required financial inputs start blank. Fields marked `*` are required; use `0`
+when the amount really is zero. Run and Save become available once the complete
+configuration is valid. Errors appear beside fields and in the validation summary.
+
+**The form uses percentages, while YAML uses decimal fractions.** Enter `6.58` in
+the mortgage percentage field to save `0.0658` in YAML. Monetary amounts and rates
+stay as text until Python parses them into exact Decimal values; no binary-float
+conversion or UI rounding is involved. Dates use `YYYY-MM-DD`. A blank recurring
+expense first due date retains the simulator's automatic schedule. Clearing an
+optional rate or cost uses zero while preserving the blank input in the draft.
+
+Each expense has Add and Remove controls. Recurring expenses support monthly or
+yearly schedules and annual percentage increases. One-time expenses can target
+renting, buying, or both. Expense ordering is retained, and row identity is stable
+while other expenses are removed.
+
+### Load, save, and export
+
+- **New** starts a blank document. **Load** reads an existing YAML file.
+- **Save** updates the current document; **Save As** chooses another destination.
+- **Export CSV**, in Results, writes the last run's committed snapshots.
+
+These actions use path-entry dialogs. Type or paste a path, including `~` for your
+home directory; the resolved absolute path is shown before continuing. Relative
+paths resolve against the process's working directory. New destinations default
+to your home directory, so personal files can stay outside the repository. Create
+parent directories before saving.
+
+An asterisk beside the document filename indicates unsaved edits. New, Load, and
+Close confirm before discarding them. Replacing another existing destination also
+requires confirmation. Failed loads do not replace the current form. YAML and CSV
+writes are atomic: failure leaves the existing destination intact. CSV export
+cannot replace the active YAML document.
+
+Saved YAML contains validated configuration values, including exact decimals.
+Comments and original formatting are not preserved. Incomplete drafts cannot be
+saved as runnable YAML.
+
+### Running and reading results
+
+**Run** captures the current validated configuration and starts a Python worker.
+Editing, saving, loading, and additional runs are disabled until it finishes;
+section navigation remains available. Progress reports the last committed date
+and snapshot count. **Cancel** requests a stop after the current simulation step.
+
+Results compare cash, investments, home value, mortgage principal, accrued
+interest, equity, net worth, estimated net worth after selling costs, cumulative
+income, and housing cash outflows. Buyer-minus-renter differences are shown below
+the comparison. No charts or manual stepping controls are included yet.
+
+Completed, cancelled, and failed runs are distinguished explicitly. Cancelled and
+failed runs retain their committed snapshots for viewing and CSV export. A failure
+before the initial snapshot reports that there is no committed state and disables
+export. Insufficient-funds failures identify the date, scenario, obligation,
+required amount, and available funds.
+
+Each run retains its exact configuration. Editing or loading another configuration
+marks older results accordingly; exporting still exports that earlier run. Run
+again to produce results for the edited form.
+
+Close requests cancellation and waits for the worker's current step to finish.
+The pinned Slint Python API has no native close-request hook: when closing through
+the OS window controls with unsaved edits or an active run, the window briefly
+reopens to show confirmation. The toolbar's **Close** button confirms directly.
+Cancelling that confirmation leaves the editor and run intact.
 
 ### Python–Slint boundary
 
 ```text
-Slint callback → feature adapter → Python controller → UI property refresh
+Slint callbacks → desktop feature adapters → plain Python application controllers
+                                ↑
+                 property/model updates on the UI thread
 ```
 
-`application/configuration_preview.py` owns a frozen `PreviewState` and a
-`PreviewController` with `rename`, `set_duration`, `reset`, and a derived `summary`.
-It imports no Slint code and has no knowledge of windows. Invalid durations are
-rejected before replacing state.
+The `application` package groups behavior into configuration editing, expense
+rows, documents, execution, and workspace commands. `ConfigurationDraft` retains
+raw input strings; `EditorController` converts them through the same validation
+entry point used by YAML. `ConfigurationError.path` identifies fields without
+parsing human-readable messages. The public `config_from_mapping(mapping)` and
+`save_config(config, path)` functions support non-UI clients too.
 
-`desktop/configuration_preview/bindings.py` defines a small `PreviewView` protocol
-and `PreviewBindings`. The adapter assigns Python methods to Slint callbacks and
-publishes state into the view's properties. It works with an ordinary Python fake
-view in tests. There are no Slint base classes or decorators in the application
-layer, and no generic observer framework.
+A `RunController` owns one worker thread and a bounded latest-progress mailbox.
+Only that worker touches the running simulator. It checks cancellation between
+steps and transfers an immutable result at completion. No application or simulator
+module imports Slint.
 
-`desktop/app.py` is the composition point and the only production module importing
-Slint. It loads the packaged components, constructs the controller and adapter,
-and runs the window on the main thread. The CLI imports this module only for the
-`ui` command. UI work is synchronous in this initial scaffold.
+Desktop adapters publish fields, expense rows, and results into Slint models.
+Updates replace only changed model rows, preserving other controls and keyboard
+focus. Python draft fields do not automatically become reactive Slint properties:
+adapters refresh after commands, and a desktop timer polls worker progress on the
+UI thread. Slint model factories are injected, so adapters can be tested with
+ordinary Python lists and objects.
 
-Python fields do **not** automatically become reactive Slint properties. UI
-callbacks explicitly invoke a controller command and then `refresh()`. When
-Python initiates a change, publish it explicitly as well:
-
-```python
-from house_simulator.application.configuration_preview import PreviewController
-from house_simulator.desktop.app import load_components
-from house_simulator.desktop.configuration_preview.bindings import PreviewBindings
-
-with load_components() as components:
-    window = components.AppWindow()
-    controller = PreviewController()
-    bindings = PreviewBindings(window, controller)
-    controller.rename("Our next home")
-    bindings.refresh()
-    window.run()
-```
-
-The adapter uses the [Slint Python callback and property APIs](https://docs.slint.dev/latest/docs/python/).
-Slint's internal bindings connect the editor fields to window properties, while
-callbacks communicate user intent to Python. Summary generation and state
-validation stay in Python.
-
-### Organizing another UI feature
-
-1. Add a plain Python controller and state under `application/`, grouped by feature.
-2. Add that feature's adapter and `.slint` components together under `desktop/`.
-   The existing preview groups its editor and summary in separate components.
-3. Export explicit component properties and callbacks. Compose them in the small
-   `desktop/app.slint` window and wire the adapter in `desktop/app.py`.
-4. Test the controller and adapter without Slint, then add a real component
-   integration test for the binding surface.
-
-Keep financial rules in the existing simulation modules when adding simulation
-controls later. Adapt their results into presentation values at the desktop
-boundary rather than introducing Slint types into the simulator.
+The root window composes functional Slint modules for configuration fields,
+expense lists, document dialogs, and results. Add future features in the matching
+application and desktop groups rather than adding financial rules to the root
+window. `desktop/app.py` owns Slint loading, its timer, and window lifecycle.
 
 ### Desktop checks
 
 ```sh
-uv run --extra ui pytest -m 'not ui'  # Includes compilation, without opening windows.
-uv run --extra ui pytest -m ui       # Opens and closes a real test window.
-uv build                            # Wheel and source distribution include .slint files.
+uv run --extra ui pytest -m 'not ui'  # Application tests and Slint compilation.
+uv run --extra ui pytest -m ui       # Real-window workflow and lifecycle tests.
+uv run ruff check .
+uv run ruff format --check .
+uv build                            # Includes the complete Slint resource tree.
 ```
 
-Tests for controllers and adapters also run with the base dependencies alone.
-Slint compilation tests skip when the optional package is absent; window tests
-additionally skip on Linux when no desktop display is configured. The window test
-exercises callbacks, property updates, explicit refresh, and event-loop shutdown.
+Core and adapter tests work with base dependencies alone. Compilation tests skip
+when Slint is absent; window tests additionally skip on Linux without a configured
+display. Real-window tests exercise form callbacks, expense editing, loading,
+Run, Cancel, CSV export, and close confirmations. Background cancellation and failure
+paths are independently tested with controllable Python workers.
 
 ## YAML configuration
 
@@ -304,5 +343,5 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
-The current version omits simulation controls in the desktop UI, plotting, random
-returns, income/capital-gains tax rules, refinancing, and mortgage overpayments.
+The current version omits charts and manual stepping controls in the desktop UI,
+random returns, income/capital-gains tax rules, refinancing, and mortgage overpayments.

@@ -1,0 +1,115 @@
+import {
+    Button,
+    ComboBox,
+    GroupBox,
+    HorizontalBox,
+    VerticalBox,
+} from "std-widgets.slint";
+import { InputField } from "../configuration/field.slint";
+
+export struct ExpenseData {
+    id: string,
+    name: string,
+    amount: string,
+    annual_increase: string,
+    date: string,
+    first_due: string,
+    selection: int,
+    name_error: string,
+    amount_error: string,
+    annual_increase_error: string,
+    date_error: string,
+    first_due_error: string,
+}
+
+export component ExpenseList inherits VerticalBox {
+    in property <[ExpenseData]> rows;
+    in property <bool> one-time: false;
+    in property <bool> editable;
+    callback edited(string, string, string);
+    callback add();
+    callback remove(string);
+    spacing: 12px;
+
+    if !root.one-time: Text {
+        text: "Recurring expenses";
+        font-size: 20px;
+    }
+    Text {
+        text: root.one-time ? "Each amount is charged in full to the selected scenario(s)." : "Add property tax, utilities, maintenance, insurance, or other expenses.";
+        wrap: word-wrap;
+    }
+
+    for item in root.rows: GroupBox {
+        title: item.name == "" ? "New expense" : item.name;
+        VerticalBox {
+            InputField {
+                label: "Name *";
+                value: item.name;
+                error: item.name_error;
+                editable: root.editable;
+                edited(value) => { root.edited(item.id, "name", value); }
+            }
+
+            InputField {
+                label: "Amount ($) *";
+                value: item.amount;
+                error: item.amount_error;
+                editable: root.editable;
+                edited(value) => { root.edited(item.id, "amount", value); }
+            }
+
+            HorizontalBox {
+                Text {
+                    text: root.one-time ? "Applies to" : "Schedule";
+                    vertical-alignment: center;
+                }
+
+                ComboBox {
+                    model: root.one-time ? ["Rent", "Buy", "Both"] : ["Monthly", "Yearly"];
+                    current-index: item.selection;
+                    enabled: root.editable;
+                    selected(value) => {
+                        if root.one-time {
+                            root.edited(item.id, "target", self.current-index == 0 ? "rent" : self.current-index == 1 ? "buy" : "both");
+                        } else {
+                            root.edited(item.id, "schedule", self.current-index == 0 ? "monthly" : "yearly");
+                        }
+                    }
+                }
+            }
+
+            if root.one-time: InputField {
+                label: "Date (YYYY-MM-DD) *";
+                value: item.date;
+                error: item.date_error;
+                editable: root.editable;
+                edited(value) => { root.edited(item.id, "date", value); }
+            }
+            if !root.one-time: InputField {
+                label: "Annual increase (%)";
+                value: item.annual_increase;
+                error: item.annual_increase_error;
+                editable: root.editable;
+                edited(value) => { root.edited(item.id, "annual_increase", value); }
+            }
+            if !root.one-time: InputField {
+                label: "First due date (blank for automatic schedule)";
+                value: item.first_due;
+                error: item.first_due_error;
+                editable: root.editable;
+                edited(value) => { root.edited(item.id, "first_due", value); }
+            }
+            Button {
+                text: "Remove expense";
+                enabled: root.editable;
+                clicked => { root.remove(item.id); }
+            }
+        }
+    }
+    Button {
+        text: "Add expense";
+        enabled: root.editable;
+        clicked => { root.add(); }
+    }
+}

@@ -1,37 +1,208 @@
-import { VerticalBox } from "std-widgets.slint";
-import { ConfigurationEditor } from "configuration_preview/editor.slint";
-import { ConfigurationSummary } from "configuration_preview/summary.slint";
+import {
+    Button,
+    HorizontalBox,
+    ScrollView,
+    VerticalBox,
+} from "std-widgets.slint";
+import { ConfigForm, FieldData } from "configuration/form.slint";
+import { ExpenseList, ExpenseData } from "expenses/list.slint";
+import { FileDialog } from "documents/dialog.slint";
+import { ResultsSummary, ResultData } from "results/summary.slint";
+export { FieldData }from "configuration/form.slint";
+export { ExpenseData }from "expenses/list.slint";
+export { ResultData }from "results/summary.slint";
 
 export component AppWindow inherits Window {
     title: "Housing Simulator";
-    preferred-width: 560px;
-    preferred-height: 360px;
-    min-width: 400px;
-
-    in-out property <string> comparison-name;
-    in-out property <int> duration-years;
-    in property <string> summary;
-    callback name-edited(string);
-    callback duration-edited(int);
-    callback reset-requested();
+    preferred-width: 1100px;
+    preferred-height: 800px;
+    min-width: 780px;
+    min-height: 540px;
+    in-out property <int> section: 0;
+    in property <string> document-label;
+    in property <string> message;
+    in property <string> validation;
+    in property <string> run-status;
+    in property <string> difference;
+    in property <bool> editable;
+    in property <bool> can-run;
+    in property <bool> running;
+    in property <bool> can-export;
+    in property <bool> stale;
+    in property <[FieldData]> fields;
+    in property <[ExpenseData]> rent-expenses;
+    in property <[ExpenseData]> buy-expenses;
+    in property <[ExpenseData]> one-time-expenses;
+    in property <[ResultData]> results;
+    in property <string> dialog-kind;
+    in property <string> dialog-title;
+    in property <string> dialog-path;
+    in property <string> dialog-resolved;
+    in property <string> dialog-message;
+    callback field-edited(string, string);
+    callback expense-edited(string, string, string, string);
+    callback expense-add(string);
+    callback expense-remove(string, string);
+    callback command(string);
+    callback dialog-path-edited(string);
+    callback dialog-accept();
+    callback dialog-dismiss();
 
     VerticalBox {
-        padding: 24px;
-        spacing: 16px;
+        padding: 16px;
+        spacing: 12px;
+        Text {
+            text: root.document-label;
+            font-size: 22px;
+            wrap: word-wrap;
+        }
+
+        HorizontalBox {
+            Button {
+                text: "New";
+                enabled: root.editable;
+                clicked => { root.command("new"); }
+            }
+
+            Button {
+                text: "Load";
+                enabled: root.editable;
+                clicked => { root.command("load"); }
+            }
+
+            Button {
+                text: "Save";
+                enabled: root.can-run;
+                clicked => { root.command("save"); }
+            }
+
+            Button {
+                text: "Save As";
+                enabled: root.can-run;
+                clicked => { root.command("save_as"); }
+            }
+
+            Button {
+                text: "Run";
+                enabled: root.can-run;
+                clicked => { root.command("run"); }
+            }
+
+            Button {
+                text: "Cancel";
+                enabled: root.running;
+                clicked => { root.command("cancel"); }
+            }
+
+            Button {
+                text: "Close";
+                clicked => { root.command("close"); }
+            }
+        }
 
         Text {
-            text: "Configuration preview";
-            font-size: 24px;
-            font-weight: 600;
+            text: root.run-status;
+            wrap: word-wrap;
         }
-        ConfigurationEditor {
-            comparison-name <=> root.comparison-name;
-            duration-years <=> root.duration-years;
-            name-edited(value) => { root.name-edited(value); }
-            duration-edited(value) => { root.duration-edited(value); }
-            reset-requested => { root.reset-requested(); }
+
+        if root.message != "": Text {
+            text: root.message;
+            wrap: word-wrap;
         }
-        ConfigurationSummary { summary: root.summary; }
-        Rectangle { vertical-stretch: 1; }
+        if root.validation != "": Text {
+            text: root.validation;
+            color: #e9b758;
+            wrap: word-wrap;
+        }
+        HorizontalBox {
+            VerticalBox {
+                horizontal-stretch: 0;
+                for label[index] in [
+                    "Simulation",
+                    "Household",
+                    "Renting",
+                    "Buying",
+                    "One-time expenses",
+                    "Results"
+                ]: Button {
+                    text: label;
+                    // Selection belongs to the active section, not button toggles.
+                    primary: root.section == index;
+                    clicked => { root.section = index; }
+                }
+                Rectangle {
+                    vertical-stretch: 1;
+                }
+            }
+
+            ScrollView {
+                VerticalBox {
+                    padding: 12px;
+                    spacing: 16px;
+                    Text {
+                        text: [
+                            "Simulation dates",
+                            "Household finances",
+                            "Renting",
+                            "Buying",
+                            "One-time expenses",
+                            "Results"
+                        ][root.section];
+                        font-size: 24px;
+                    }
+
+                    if root.section < 5: ConfigForm {
+                        fields: root.fields;
+                        section: root.section;
+                        editable: root.editable;
+                        edited(key, value) => { root.field-edited(key, value); }
+                    }
+                    if root.section == 2: ExpenseList {
+                        rows: root.rent-expenses;
+                        editable: root.editable;
+                        edited(id, key, value) => { root.expense-edited("rent", id, key, value); }
+                        add => { root.expense-add("rent"); }
+                        remove(id) => { root.expense-remove("rent", id); }
+                    }
+                    if root.section == 3: ExpenseList {
+                        rows: root.buy-expenses;
+                        editable: root.editable;
+                        edited(id, key, value) => { root.expense-edited("buy", id, key, value); }
+                        add => { root.expense-add("buy"); }
+                        remove(id) => { root.expense-remove("buy", id); }
+                    }
+                    if root.section == 4: ExpenseList {
+                        rows: root.one-time-expenses;
+                        editable: root.editable;
+                        one-time: true;
+                        edited(id, key, value) => { root.expense-edited("one_time", id, key, value); }
+                        add => { root.expense-add("one_time"); }
+                        remove(id) => { root.expense-remove("one_time", id); }
+                    }
+                    if root.section == 5: ResultsSummary {
+                        rows: root.results;
+                        status: root.run-status;
+                        difference: root.difference;
+                        stale: root.stale;
+                        can-export: root.can-export;
+                        export-csv => { root.command("export"); }
+                    }
+                    Rectangle {
+                        vertical-stretch: 1;
+                    }
+                }
+            }
+        }
+    }
+
+    if root.dialog-kind != "": FileDialog {
+        kind: root.dialog-kind;
+        title: root.dialog-title;
+        path: root.dialog-path;
+        resolved-path: root.dialog-resolved;
+        message: root.dialog-message;
+        path-edited(value) => { root.dialog-path-edited(value); }
+        accept => { root.dialog-accept(); }
+        dismiss => { root.dialog-dismiss(); }
     }
 }

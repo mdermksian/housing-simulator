@@ -1,0 +1,81 @@
+import { Button, HorizontalBox, VerticalBox } from "std-widgets.slint";
+
+export struct ResultData { label: string, rent: string, buy: string }
+
+component ResultRow inherits Rectangle {
+    in property <string> label;
+    in property <string> rent;
+    in property <string> buy;
+    min-width: 520px;
+    min-height: 24px;
+    preferred-height: max(24px, label.preferred-height);
+    horizontal-stretch: 1;
+    vertical-stretch: 0;
+    label := Text {
+        text: root.label;
+        wrap: word-wrap;
+        x: 0;
+        y: 0;
+        width: (root.width - 32px) * 0.48;
+    }
+
+    Text {
+        text: root.rent;
+        horizontal-alignment: right;
+        y: 0;
+        x: (root.width - 32px) * 0.48 + 16px;
+        width: (root.width - 32px) * 0.26;
+        overflow: elide;
+    }
+
+    Text {
+        text: root.buy;
+        horizontal-alignment: right;
+        y: 0;
+        x: (root.width - 32px) * 0.74 + 32px;
+        width: (root.width - 32px) * 0.26;
+        overflow: elide;
+    }
+}
+
+export component ResultsSummary inherits VerticalBox {
+    in property <[ResultData]> rows;
+    in property <string> status;
+    in property <string> difference;
+    in property <bool> stale;
+    in property <bool> can-export;
+    callback export-csv();
+    spacing: 12px;
+    vertical-stretch: 0;
+    Text {
+        text: root.status;
+        wrap: word-wrap;
+    }
+
+    if root.stale: Text {
+        text: "These results belong to a previous configuration. Run again to compare your edits.";
+        wrap: word-wrap;
+        color: #e9b758;
+    }
+    ResultRow {
+        label: "Balance / cumulative total";
+        rent: "Rent";
+        buy: "Buy";
+    }
+
+    for item in root.rows: ResultRow {
+        label: item.label;
+        rent: item.rent;
+        buy: item.buy;
+    }
+    Text {
+        text: root.difference;
+        wrap: word-wrap;
+    }
+
+    Button {
+        text: "Export CSV";
+        enabled: root.can-export;
+        clicked => { root.export-csv(); }
+    }
+}

@@ -2,11 +2,12 @@
 
 from collections.abc import Generator
 from contextlib import contextmanager
+from datetime import timedelta
 from importlib.resources import as_file, files
 from types import SimpleNamespace
 
-from ..application.configuration_preview import PreviewController
-from .configuration_preview.bindings import PreviewBindings
+from ..application.workspace import WorkspaceController
+from .bindings import WorkspaceBindings
 
 
 class MissingUI(RuntimeError):
@@ -33,8 +34,23 @@ def load_components() -> Generator[SimpleNamespace]:
 
 def run() -> None:
     with load_components() as components:
+        import slint
+
         window = components.AppWindow()
-        controller = PreviewController()
-        # Retain the adapter for the complete lifetime of the window.
-        _bindings = PreviewBindings(window, controller)
-        window.run()
+        workspace = WorkspaceController()
+        bindings = WorkspaceBindings(window, workspace, slint.ListModel, components)
+        timer = slint.Timer()
+        timer.start(slint.TimerMode.Repeated, timedelta(milliseconds=50), bindings.poll)
+        try:
+            while not workspace.should_close:
+                window.run()
+                if not workspace.should_close:
+                    # Python Slint 1.17 has no native close-request hook. On an
+                    # OS close, show the same window again with confirmation if
+                    # edits or an active run need protection.
+                    workspace.dismiss_dialog()
+                    workspace.request("close")
+                    bindings.refresh()
+        finally:
+            timer.stop()
+            workspace.close()

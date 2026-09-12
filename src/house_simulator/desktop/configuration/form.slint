@@ -1,0 +1,33 @@
+import { VerticalBox } from "std-widgets.slint";
+import { InputField } from "field.slint";
+
+export struct FieldData {
+    key: string,
+    label: string,
+    value: string,
+    error: string,
+    section: int,
+}
+
+export component ConfigForm inherits VerticalBox {
+    in property <[FieldData]> fields;
+    in property <int> section;
+    in property <bool> editable;
+    callback edited(string, string);
+    spacing: 0px;
+    padding: 0px;
+    for item in root.fields: VerticalBox {
+        spacing: 0px;
+        padding: 0px;
+        if item.section == root.section: VerticalBox {
+            padding-top: 6px; padding-bottom: 6px;
+            InputField {
+                label: item.label;
+                value: item.value;
+                error: item.error;
+                editable: root.editable;
+                edited(value) => { root.edited(item.key, value); }
+            }
+        }
+    }
+}
