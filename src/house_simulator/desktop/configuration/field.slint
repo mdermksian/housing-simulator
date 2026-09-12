@@ -7,12 +7,17 @@ export component InputField inherits VerticalBox {
     in property <bool> editable: true;
     callback edited(string);
     spacing: 4px;
-    Text { text: root.label; wrap: word-wrap; }
+    Text {
+        text: root.label;
+        wrap: word-wrap;
+    }
+
     LineEdit {
         text: root.value;
         enabled: root.editable;
         edited(value) => { root.edited(value); }
     }
+
     if root.error != "": Text {
         text: root.error;
         color: #e77b73;

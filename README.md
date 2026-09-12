@@ -161,6 +161,68 @@ display. Real-window tests exercise form callbacks, expense editing, loading,
 Run, Cancel, CSV export, and close confirmations. Background cancellation and failure
 paths are independently tested with controllable Python workers.
 
+### Quality checks and CI
+
+The GitHub Actions **Quality** workflow runs on pushes, pull requests, and manual
+dispatch. It checks Python formatting and lint with Ruff, Slint formatting with
+`slint-lsp`, Slint compiler diagnostics, and the full test suite. It uses Python
+from `.python-version` and the dependencies in `uv.lock`.
+
+Install the development and UI dependencies before running the checks locally:
+
+```sh
+uv sync --locked --dev --extra ui
+```
+
+Install **slint-lsp 1.17.1**, matching the project's Slint release series. Download
+the prebuilt archive for your operating system from the
+[official release](https://github.com/slint-ui/slint/releases/tag/v1.17.1), verify
+the SHA-256 shown beside the asset, and put the extracted `slint-lsp` executable
+on your `PATH`. No Rust compilation is needed. For Linux x86-64, the archive is
+`slint-lsp-x86_64-unknown-linux-gnu.tar.gz` and its SHA-256 is:
+
+```text
+6f363163c4deafea085191c2c3cb80d8af8a71510370dac6a1dca21177b571fa
+```
+
+Confirm `slint-lsp --version` reports `1.17.1`, then run:
+
+```sh
+uv run --no-sync ruff format --check .
+uv run --no-sync ruff check .
+uv run --no-sync python scripts/slint_quality.py format --check
+uv run --no-sync python scripts/slint_quality.py lint
+uv run --no-sync pytest -ra
+```
+
+`--no-sync` reuses the environment installed above, including its UI extra. The
+Slint format check discovers every `.slint` file beneath `src/` and prints diffs
+without changing files. To apply formatting locally, run:
+
+```sh
+uv run --no-sync ruff format .
+uv run --no-sync python scripts/slint_quality.py format
+```
+
+Slint lint fails on **warnings as well as errors**, including compiler-reported
+deprecations. It compiles the application entry point and its imported components
+without creating a window. Reusable components are checked through those imports,
+so they are not incorrectly treated as standalone windows. The quality helper is
+development tooling; it does not add Slint dependencies to the simulator core.
+
+CI runs window tests using Xvfb and Slint's software renderer. To reproduce that
+on Ubuntu, install the desktop runtime and run:
+
+```sh
+sudo apt-get install -y xvfb xauth libx11-xcb1 libxkbcommon-x11-0 \
+  libxcb-shape0 libxcb-xfixes0 libinput10 libgbm1 fonts-dejavu-core
+SLINT_BACKEND=winit-software SLINT_STYLE=fluent \
+  xvfb-run -a -s "-screen 0 1280x1024x24" uv run --no-sync pytest -ra
+```
+
+Without Slint, the formatter, or a display, their respective integration tests
+skip locally; CI installs all three so these tests execute.
+
 ## YAML configuration
 
 Required sections and fields:

@@ -1,0 +1,68 @@
+name: Quality
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Format, lint, and tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SLINT_BACKEND: winit-software
+      SLINT_STYLE: fluent
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install Python and dependencies
+        run: |
+          uv python install
+          uv sync --locked --dev --extra ui
+
+      - name: Install desktop runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            xvfb xauth libx11-xcb1 libxkbcommon-x11-0 libxcb-shape0 \
+            libxcb-xfixes0 libinput10 libgbm1 fonts-dejavu-core
+
+      - name: Install Slint formatter
+        working-directory: ${{ runner.temp }}
+        run: |
+          curl --fail --location --retry 3 \
+            --output slint-lsp.tar.gz \
+            https://github.com/slint-ui/slint/releases/download/v1.17.1/slint-lsp-x86_64-unknown-linux-gnu.tar.gz
+          echo "6f363163c4deafea085191c2c3cb80d8af8a71510370dac6a1dca21177b571fa  slint-lsp.tar.gz" | sha256sum --check --strict
+          tar -xzf slint-lsp.tar.gz
+          echo "$RUNNER_TEMP/slint-lsp" >> "$GITHUB_PATH"
+          ./slint-lsp/slint-lsp --version
+
+      - name: Python format
+        run: uv run --no-sync ruff format --check .
+
+      - name: Python lint
+        run: uv run --no-sync ruff check .
+
+      - name: Slint format
+        run: uv run --no-sync python scripts/slint_quality.py format --check
+
+      - name: Slint lint
+        run: uv run --no-sync python scripts/slint_quality.py lint
+
+      - name: Tests including Slint windows
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" uv run --no-sync pytest -ra
