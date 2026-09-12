@@ -3,6 +3,8 @@ name = "house-simulator"
 version = "0.1.0"
 description = "An event-driven rent-versus-buy housing simulator"
 readme = "README.md"
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
     "PyYAML>=6.0.2,<7",
