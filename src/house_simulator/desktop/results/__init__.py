@@ -1,0 +1,1 @@
+"""Financial result presentation."""

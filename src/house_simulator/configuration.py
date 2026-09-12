@@ -5,7 +5,7 @@ or string amounts; binary floats are rejected instead of silently approximated.
 """
 
 import types
-from dataclasses import MISSING, dataclass, fields, is_dataclass
+from dataclasses import MISSING, asdict, dataclass, fields, is_dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -17,18 +17,21 @@ ZERO = Decimal(0)
 
 
 class ConfigurationError(ValueError):
-    pass
+    def __init__(self, message: str, *, path: str = "") -> None:
+        self.path = path
+        self.message = message
+        super().__init__(f"{path}: {message}" if path else message)
 
 
 def _decimal(value: object, path: str) -> Decimal:
     if isinstance(value, bool) or not isinstance(value, (Decimal, int, str)):
-        raise ConfigurationError(f"{path}: expected a decimal number (not a float)")
+        raise ConfigurationError("expected a decimal number (not a float)", path=path)
     try:
         result = Decimal(value)
     except InvalidOperation as exc:
-        raise ConfigurationError(f"{path}: expected a decimal number") from exc
+        raise ConfigurationError("expected a decimal number", path=path) from exc
     if not result.is_finite():
-        raise ConfigurationError(f"{path}: must be finite")
+        raise ConfigurationError("must be finite", path=path)
     return result
 
 
@@ -36,11 +39,11 @@ def _numbers(instance: object, **limits: str) -> None:
     for name, limit in limits.items():
         value = _decimal(getattr(instance, name), name)
         if limit == "nonnegative" and value < 0:
-            raise ConfigurationError(f"{name}: must be nonnegative")
+            raise ConfigurationError("must be nonnegative", path=name)
         if limit == "growth" and value <= -1:
-            raise ConfigurationError(f"{name}: must be greater than -1")
+            raise ConfigurationError("must be greater than -1", path=name)
         if limit == "fraction" and not 0 <= value <= 1:
-            raise ConfigurationError(f"{name}: must be between 0 and 1")
+            raise ConfigurationError("must be between 0 and 1", path=name)
         object.__setattr__(instance, name, value)
 
 
@@ -54,7 +57,7 @@ def _date(value: object, path: str) -> date:
                 return parsed
         except ValueError:
             pass
-    raise ConfigurationError(f"{path}: expected an ISO date (YYYY-MM-DD)")
+    raise ConfigurationError("expected an ISO date (YYYY-MM-DD)", path=path)
 
 
 @dataclass(frozen=True)
@@ -66,7 +69,7 @@ class TimelineConfig:
         object.__setattr__(self, "start", _date(self.start, "start"))
         object.__setattr__(self, "end", _date(self.end, "end"))
         if self.end <= self.start:
-            raise ConfigurationError("end: must be after start")
+            raise ConfigurationError("must be after start", path="end")
 
 
 @dataclass(frozen=True)
@@ -100,10 +103,10 @@ class RecurringExpense:
 
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or not self.name.strip():
-            raise ConfigurationError("name: must be a nonempty string")
+            raise ConfigurationError("must be a nonempty string", path="name")
         _numbers(self, amount="nonnegative", annual_increase="growth")
         if self.schedule not in ("monthly", "yearly"):
-            raise ConfigurationError("schedule: must be monthly or yearly")
+            raise ConfigurationError("must be monthly or yearly", path="schedule")
         if self.first_due is not None:
             object.__setattr__(self, "first_due", _date(self.first_due, "first_due"))
 
@@ -111,10 +114,12 @@ class RecurringExpense:
 def _expenses(instance: "RentConfig | BuyConfig") -> None:
     expenses = tuple(instance.expenses)
     if any(not isinstance(item, RecurringExpense) for item in expenses):
-        raise ConfigurationError("expenses: expected RecurringExpense values")
+        raise ConfigurationError("expected RecurringExpense values", path="expenses")
     names = [item.name for item in expenses]
     if len(names) != len(set(names)):
-        raise ConfigurationError("expenses: names must be unique within each scenario")
+        raise ConfigurationError(
+            "names must be unique within each scenario", path="expenses"
+        )
     object.__setattr__(instance, "expenses", expenses)
 
 
@@ -137,7 +142,7 @@ class MortgageConfig:
     def __post_init__(self) -> None:
         _numbers(self, annual_rate="nonnegative")
         if type(self.term_years) is not int or self.term_years <= 0:
-            raise ConfigurationError("term_years: must be a positive integer")
+            raise ConfigurationError("must be a positive integer", path="term_years")
 
 
 @dataclass(frozen=True)
@@ -160,9 +165,11 @@ class BuyConfig:
             selling_cost_fraction="fraction",
         )
         if self.down_payment > self.purchase_price:
-            raise ConfigurationError("down_payment: cannot exceed purchase_price")
+            raise ConfigurationError(
+                "cannot exceed purchase_price", path="down_payment"
+            )
         if not isinstance(self.mortgage, MortgageConfig):
-            raise ConfigurationError("mortgage: expected MortgageConfig")
+            raise ConfigurationError("expected MortgageConfig", path="mortgage")
         _expenses(self)
 
 
@@ -175,11 +182,11 @@ class OneTimeExpense:
 
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or not self.name.strip():
-            raise ConfigurationError("name: must be a nonempty string")
+            raise ConfigurationError("must be a nonempty string", path="name")
         _numbers(self, amount="nonnegative")
         object.__setattr__(self, "date", _date(self.date, "date"))
         if self.target not in ("rent", "buy", "both"):
-            raise ConfigurationError("target: must be rent, buy, or both")
+            raise ConfigurationError("must be rent, buy, or both", path="target")
 
 
 @dataclass(frozen=True)
@@ -198,30 +205,32 @@ class SimulationConfig:
             ("buy", BuyConfig),
         ):
             if not isinstance(getattr(self, name), cls):
-                raise ConfigurationError(f"{name}: expected {cls.__name__}")
+                raise ConfigurationError(f"expected {cls.__name__}", path=name)
         if (
             self.buy.down_payment + self.buy.purchase_closing_costs
             > self.household.starting_wealth
         ):
             raise ConfigurationError(
-                "buy.down_payment + buy.purchase_closing_costs: "
-                "cannot exceed household.starting_wealth"
+                "cannot exceed household.starting_wealth",
+                path="buy.down_payment + buy.purchase_closing_costs",
             )
         for scenario in ("rent", "buy"):
             for index, expense in enumerate(getattr(self, scenario).expenses):
                 if expense.first_due and expense.first_due < self.simulation.start:
                     raise ConfigurationError(
-                        f"{scenario}.expenses[{index}].first_due: cannot precede start"
+                        "cannot precede start",
+                        path=f"{scenario}.expenses[{index}].first_due",
                     )
         expenses = tuple(self.one_time_expenses)
         for index, expense in enumerate(expenses):
             if not isinstance(expense, OneTimeExpense):
                 raise ConfigurationError(
-                    f"one_time_expenses[{index}]: expected OneTimeExpense"
+                    "expected OneTimeExpense", path=f"one_time_expenses[{index}]"
                 )
             if not self.simulation.start <= expense.date <= self.simulation.end:
                 raise ConfigurationError(
-                    f"one_time_expenses[{index}].date: must be within the simulation"
+                    "must be within the simulation",
+                    path=f"one_time_expenses[{index}].date",
                 )
         object.__setattr__(self, "one_time_expenses", expenses)
 
@@ -236,7 +245,7 @@ class _DecimalLoader(yaml.SafeLoader):
             if not isinstance(key, str):
                 raise ConfigurationError("YAML field names must be strings")
             if key in result:
-                raise ConfigurationError(f"{key}: duplicate YAML field")
+                raise ConfigurationError("duplicate YAML field", path=key)
             result[key] = self.construct_object(value_node, deep=deep)
         return result
 
@@ -253,7 +262,7 @@ def _yaml_decimal(loader, node):
         return Decimal(value)
     except InvalidOperation as exc:
         raise ConfigurationError(
-            f"line {node.start_mark.line + 1}: expected a decimal number"
+            "expected a decimal number", path=f"line {node.start_mark.line + 1}"
         ) from exc
 
 
@@ -272,29 +281,31 @@ def _decode(expected, value, path: str):
         return _decode(get_args(expected)[0], value, path)
     if origin is Literal:
         if value not in get_args(expected):
-            raise ConfigurationError(f"{path}: expected one of {get_args(expected)}")
+            raise ConfigurationError(f"expected one of {get_args(expected)}", path=path)
         return value
     if origin is tuple:
         if not isinstance(value, list):
-            raise ConfigurationError(f"{path}: expected a list")
+            raise ConfigurationError("expected a list", path=path)
         return tuple(
             _decode(get_args(expected)[0], item, f"{path}[{index}]")
             for index, item in enumerate(value)
         )
     if is_dataclass(expected):
         if not isinstance(value, dict):
-            raise ConfigurationError(f"{path}: expected a mapping")
+            raise ConfigurationError("expected a mapping", path=path)
+        if any(not isinstance(key, str) for key in value):
+            raise ConfigurationError("field names must be strings", path=path)
         valid = {item.name for item in fields(expected)}
         if unknown := value.keys() - valid:
             name = sorted(unknown)[0]
-            raise ConfigurationError(f"{path}.{name}: unknown field")
+            raise ConfigurationError("unknown field", path=f"{path}.{name}")
         for item in fields(expected):
             if (
                 item.name not in value
                 and item.default is MISSING
                 and item.default_factory is MISSING
             ):
-                raise ConfigurationError(f"{path}.{item.name}: required field")
+                raise ConfigurationError("required field", path=f"{path}.{item.name}")
         hints = get_type_hints(expected)
         kwargs = {
             name: _decode(hints[name], item, f"{path}.{name}")
@@ -302,14 +313,15 @@ def _decode(expected, value, path: str):
         }
         try:
             return expected(**kwargs)
-        except (ConfigurationError, TypeError) as exc:
-            raise ConfigurationError(f"{path}.{exc}") from exc
+        except ConfigurationError as exc:
+            full_path = f"{path}.{exc.path}" if exc.path else path
+            raise ConfigurationError(exc.message, path=full_path) from exc
     if expected is Decimal:
         return _decimal(value, path)
     if expected is date:
         return _date(value, path)
     if type(value) is not expected:
-        raise ConfigurationError(f"{path}: expected {expected.__name__}")
+        raise ConfigurationError(f"expected {expected.__name__}", path=path)
     return value
 
 
@@ -317,6 +329,34 @@ def load_config(path: str | Path) -> SimulationConfig:
     try:
         with Path(path).open(encoding="utf-8") as source:
             document = yaml.load(source, Loader=_DecimalLoader)
-        return _decode(SimulationConfig, document, "config")
+        return config_from_mapping(document)
     except yaml.YAMLError as exc:
         raise ConfigurationError(f"Invalid YAML: {exc}") from exc
+
+
+def config_from_mapping(mapping: dict) -> SimulationConfig:
+    """Validate the same input structure accepted by YAML, without file I/O."""
+    return _decode(SimulationConfig, mapping, "config")
+
+
+class _ConfigDumper(yaml.SafeDumper):
+    pass
+
+
+_ConfigDumper.add_representer(
+    Decimal,
+    lambda dumper, value: dumper.represent_scalar(
+        "tag:yaml.org,2002:float", str(value)
+    ),
+)
+
+
+def save_config(config: SimulationConfig, path: str | Path) -> None:
+    """Save canonical YAML atomically, retaining exact Decimal values."""
+    from .file_io import atomic_destination
+
+    with atomic_destination(path) as temporary:
+        temporary.write_text(
+            yaml.dump(asdict(config), Dumper=_ConfigDumper, sort_keys=False),
+            encoding="utf-8",
+        )

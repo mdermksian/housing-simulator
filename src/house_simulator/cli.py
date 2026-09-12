@@ -16,12 +16,30 @@ def main(argv: list[str] | None = None) -> int:
     run = commands.add_parser("run", help="Run a YAML configuration and export CSV")
     run.add_argument("config", type=Path)
     run.add_argument("--output", required=True, type=Path)
+    commands.add_parser("ui", help="Open the simulation editor desktop UI")
     args = parser.parse_args(argv)
+    if args.command == "ui":
+        return _run_ui()
+    return _run_comparison(args.config, args.output)
+
+
+def _run_ui() -> int:
+    from .desktop.app import MissingUI, run
+
+    try:
+        run()
+    except MissingUI as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
+def _run_comparison(config_path: Path, output_path: Path) -> int:
     simulator = None
     try:
-        if args.config.resolve() == args.output.resolve():
+        if config_path.resolve() == output_path.resolve():
             raise ConfigurationError("The output path must differ from the YAML input")
-        config = load_config(args.config)
+        config = load_config(config_path)
         try:
             simulator = Simulation(config)
             result = simulator.run()
@@ -32,16 +50,16 @@ def main(argv: list[str] | None = None) -> int:
                 if simulator is not None
                 else SimulationResult((), completed=False, failure=exc)
             )
-            write_csv(result, args.output)
+            write_csv(result, output_path)
             print(f"Simulation stopped: {exc}", file=sys.stderr)
             print(
-                f"Wrote {len(result.snapshots)} committed snapshots to {args.output}",
+                f"Wrote {len(result.snapshots)} committed snapshots to {output_path}",
                 file=sys.stderr,
             )
             return 1
-        write_csv(result, args.output)
+        write_csv(result, output_path)
     except (ConfigurationError, OSError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 2
-    print(f"Wrote {len(result.snapshots)} snapshots to {args.output}")
+    print(f"Wrote {len(result.snapshots)} snapshots to {output_path}")
     return 0

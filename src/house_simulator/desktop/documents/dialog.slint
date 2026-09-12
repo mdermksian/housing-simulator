@@ -1,0 +1,68 @@
+import {
+    Button,
+    HorizontalBox,
+    LineEdit,
+    VerticalBox,
+} from "std-widgets.slint";
+
+export component FileDialog inherits Rectangle {
+    in property <string> kind;
+    in property <string> title;
+    in property <string> path;
+    in property <string> resolved-path;
+    in property <string> message;
+    callback path-edited(string);
+    callback accept();
+    callback dismiss();
+    background: #0009;
+    TouchArea { } // Block pointer access to the form behind the dialog.
+    Rectangle {
+        width: min(640px, parent.width - 48px);
+        height: root.kind == "path" ? 280px : 200px;
+        x: (parent.width - self.width) / 2;
+        y: max(12px, (parent.height - self.height) / 2);
+        background: #252525;
+        border-radius: 8px;
+        VerticalBox {
+            padding: 20px;
+            spacing: 12px;
+            Text {
+                text: root.title;
+                color: white;
+                font-size: 20px;
+            }
+
+            if root.kind == "path": LineEdit {
+                text: root.path;
+                edited(value) => { root.path-edited(value); }
+                accepted => { root.accept(); }
+            }
+            if root.kind == "path": Text {
+                text: "Resolved path: " + root.resolved-path;
+                color: #dedede;
+                wrap: word-wrap;
+            }
+            Text {
+                text: root.message;
+                color: #dedede;
+                wrap: word-wrap;
+            }
+
+            Rectangle {
+                vertical-stretch: 1;
+            }
+
+            HorizontalBox {
+                Button {
+                    text: "Cancel";
+                    clicked => { root.dismiss(); }
+                }
+
+                Button {
+                    text: root.kind == "path" ? "Continue" : "Confirm";
+                    clicked => { root.accept(); }
+                }
+            }
+        }
+    }
+}

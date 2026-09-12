@@ -10,7 +10,9 @@ from .configuration import (
     RentConfig,
     SimulationConfig,
     TimelineConfig,
+    config_from_mapping,
     load_config,
+    save_config,
 )
 from .reporting import write_csv
 from .simulation.engine import Simulation
@@ -38,6 +40,8 @@ __all__ = [
     "SimulationState",
     "Snapshot",
     "TimelineConfig",
+    "config_from_mapping",
     "load_config",
+    "save_config",
     "write_csv",
 ]
