@@ -1,0 +1,36 @@
+import { Button, LineEdit, SpinBox, VerticalBox, HorizontalBox } from "std-widgets.slint";
+
+export component ConfigurationEditor inherits VerticalBox {
+    in-out property <string> comparison-name;
+    in-out property <int> duration-years;
+    callback name-edited(string);
+    callback duration-edited(int);
+    callback reset-requested();
+
+    spacing: 12px;
+
+    Text { text: "Comparison name"; }
+    LineEdit {
+        text <=> root.comparison-name;
+        placeholder-text: "Name your comparison";
+        edited(value) => { root.name-edited(value); }
+    }
+
+    HorizontalBox {
+        Text { text: "Duration (years)"; vertical-alignment: center; }
+        SpinBox {
+            value <=> root.duration-years;
+            minimum: 1;
+            maximum: 100;
+            edited(value) => { root.duration-edited(value); }
+        }
+    }
+
+    HorizontalBox {
+        Rectangle { horizontal-stretch: 1; }
+        Button {
+            text: "Reset";
+            clicked => { root.reset-requested(); }
+        }
+    }
+}

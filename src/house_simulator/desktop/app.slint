@@ -1,0 +1,37 @@
+import { VerticalBox } from "std-widgets.slint";
+import { ConfigurationEditor } from "configuration_preview/editor.slint";
+import { ConfigurationSummary } from "configuration_preview/summary.slint";
+
+export component AppWindow inherits Window {
+    title: "Housing Simulator";
+    preferred-width: 560px;
+    preferred-height: 360px;
+    min-width: 400px;
+
+    in-out property <string> comparison-name;
+    in-out property <int> duration-years;
+    in property <string> summary;
+    callback name-edited(string);
+    callback duration-edited(int);
+    callback reset-requested();
+
+    VerticalBox {
+        padding: 24px;
+        spacing: 16px;
+
+        Text {
+            text: "Configuration preview";
+            font-size: 24px;
+            font-weight: 600;
+        }
+        ConfigurationEditor {
+            comparison-name <=> root.comparison-name;
+            duration-years <=> root.duration-years;
+            name-edited(value) => { root.name-edited(value); }
+            duration-edited(value) => { root.duration-edited(value); }
+            reset-requested => { root.reset-requested(); }
+        }
+        ConfigurationSummary { summary: root.summary; }
+        Rectangle { vertical-stretch: 1; }
+    }
+}

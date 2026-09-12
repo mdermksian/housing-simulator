@@ -8,6 +8,9 @@ dependencies = [
     "PyYAML>=6.0.2,<7",
 ]
 
+[project.optional-dependencies]
+ui = ["slint==1.17.1b2"]
+
 [build-system]
 requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
@@ -26,3 +29,4 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["ui: requires Slint and a working desktop display"]

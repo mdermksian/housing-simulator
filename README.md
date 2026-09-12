@@ -3,8 +3,9 @@
 Compare renting and buying over a configured period, accounting for household
 income, invested savings, mortgage debt, home value, and housing expenses. The
 Python simulator advances directly to dates when something changes and records
-immutable snapshots for plotting. Slint integration is deferred; configuration
-and execution are available through Python and a YAML-to-CSV command line.
+immutable snapshots for plotting. Configuration and execution are available
+through Python and a YAML-to-CSV command line. An optional Slint desktop preview
+demonstrates editing plain Python state; simulation execution remains in the CLI.
 
 ## Run a comparison
 
@@ -27,6 +28,99 @@ updates, and one additional date for the roof expense.
 
 All amounts are dollars. Rates are decimal fractions: **0.03 means 3%**.
 Income is take-home income. Returns and price changes are deterministic.
+
+## Open the desktop preview
+
+```sh
+uv run --extra ui house-simulator ui
+```
+
+Alternatively, install with `python -m pip install -e '.[ui]'` and run
+`house-simulator ui`. The optional extra pins Slint Python to `1.17.1b2`; the
+simulation and CSV command do not require it. A desktop display is needed to open
+the window. Slint supplies binary wheels for supported platforms, so no separate
+Rust build or generated Python bindings are needed for this scaffold.
+
+The window starts with **My housing comparison** and **15 years**. Edit the name
+or duration (1–100 years) to update the summary immediately. Empty names display
+**Untitled comparison**. Reset restores the defaults. Preview state is in memory;
+the window does not load/save YAML or execute the simulation.
+
+The `.slint` files ship with the Python package and load through package resources,
+including relative imports between components. An installed `house-simulator ui`
+works from any working directory.
+
+### Python–Slint boundary
+
+```text
+Slint callback → feature adapter → Python controller → UI property refresh
+```
+
+`application/configuration_preview.py` owns a frozen `PreviewState` and a
+`PreviewController` with `rename`, `set_duration`, `reset`, and a derived `summary`.
+It imports no Slint code and has no knowledge of windows. Invalid durations are
+rejected before replacing state.
+
+`desktop/configuration_preview/bindings.py` defines a small `PreviewView` protocol
+and `PreviewBindings`. The adapter assigns Python methods to Slint callbacks and
+publishes state into the view's properties. It works with an ordinary Python fake
+view in tests. There are no Slint base classes or decorators in the application
+layer, and no generic observer framework.
+
+`desktop/app.py` is the composition point and the only production module importing
+Slint. It loads the packaged components, constructs the controller and adapter,
+and runs the window on the main thread. The CLI imports this module only for the
+`ui` command. UI work is synchronous in this initial scaffold.
+
+Python fields do **not** automatically become reactive Slint properties. UI
+callbacks explicitly invoke a controller command and then `refresh()`. When
+Python initiates a change, publish it explicitly as well:
+
+```python
+from house_simulator.application.configuration_preview import PreviewController
+from house_simulator.desktop.app import load_components
+from house_simulator.desktop.configuration_preview.bindings import PreviewBindings
+
+with load_components() as components:
+    window = components.AppWindow()
+    controller = PreviewController()
+    bindings = PreviewBindings(window, controller)
+    controller.rename("Our next home")
+    bindings.refresh()
+    window.run()
+```
+
+The adapter uses the [Slint Python callback and property APIs](https://docs.slint.dev/latest/docs/python/).
+Slint's internal bindings connect the editor fields to window properties, while
+callbacks communicate user intent to Python. Summary generation and state
+validation stay in Python.
+
+### Organizing another UI feature
+
+1. Add a plain Python controller and state under `application/`, grouped by feature.
+2. Add that feature's adapter and `.slint` components together under `desktop/`.
+   The existing preview groups its editor and summary in separate components.
+3. Export explicit component properties and callbacks. Compose them in the small
+   `desktop/app.slint` window and wire the adapter in `desktop/app.py`.
+4. Test the controller and adapter without Slint, then add a real component
+   integration test for the binding surface.
+
+Keep financial rules in the existing simulation modules when adding simulation
+controls later. Adapt their results into presentation values at the desktop
+boundary rather than introducing Slint types into the simulator.
+
+### Desktop checks
+
+```sh
+uv run --extra ui pytest -m 'not ui'  # Includes compilation, without opening windows.
+uv run --extra ui pytest -m ui       # Opens and closes a real test window.
+uv build                            # Wheel and source distribution include .slint files.
+```
+
+Tests for controllers and adapters also run with the base dependencies alone.
+Slint compilation tests skip when the optional package is absent; window tests
+additionally skip on Linux when no desktop display is configured. The window test
+exercises callbacks, property updates, explicit refresh, and event-loop shutdown.
 
 ## YAML configuration
 
@@ -210,5 +304,5 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
-The first version omits Slint, plotting, random returns, income/capital-gains tax
-rules, refinancing, and mortgage overpayments.
+The current version omits simulation controls in the desktop UI, plotting, random
+returns, income/capital-gains tax rules, refinancing, and mortgage overpayments.
