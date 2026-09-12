@@ -163,8 +163,8 @@ paths are independently tested with controllable Python workers.
 
 ### Quality checks and CI
 
-The GitHub Actions **Quality** workflow runs on pushes, pull requests, and manual
-dispatch. It checks Python formatting and lint with Ruff, Slint formatting with
+The GitHub Actions **Quality** workflow runs on pushes to `main`, pull requests,
+and manual dispatch. It checks Python formatting and lint with Ruff, Slint formatting with
 `slint-lsp`, Slint compiler diagnostics, and the full test suite. It uses Python
 from `.python-version` and the dependencies in `uv.lock`.
 
